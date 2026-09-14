@@ -76,11 +76,14 @@ card-art:
 		echo "card-art requires ROMS_ROOT=/path/to/ROMS METADATA=/path/to/release-metadata.zip"; exit 1; \
 	fi
 	$(PYTHON) tools/pack_covers.py "$(ROMS_ROOT)" --metadata "$(METADATA)" \
-		--destination $(BUILD_DIR)/sd/sleekmenu/covers
+		--destination $(BUILD_DIR)/sd/sleekmenu/covers \
+		--zoom-destination $(BUILD_DIR)/sd/sleekmenu/covers-zoom
 	$(PYTHON) tools/cover_pack.py $(BUILD_DIR)/sd/sleekmenu/covers \
 		--output $(BUILD_DIR)/sd/sleekmenu/covers.pak
+	$(PYTHON) tools/cover_pack.py $(BUILD_DIR)/sd/sleekmenu/covers-zoom \
+		--output $(BUILD_DIR)/sd/sleekmenu/covers-zoom.pak
 	@echo ""
-	@echo "Covers:  $(BUILD_DIR)/sd/sleekmenu/covers.pak -> copy to the card as sleekmenu/covers.pak"
+	@echo "Covers:  $(BUILD_DIR)/sd/sleekmenu/covers.pak and covers-zoom.pak -> copy to sleekmenu/"
 
 covers-pak:
 	@if [ -z "$(COVER_DIR)" ]; then \

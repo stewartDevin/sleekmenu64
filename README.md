@@ -50,7 +50,8 @@ python3 sleekmenu-prep.pyz
 ```
 
 It reads every ROM, matches each one to its box and description, and writes
-`sleekmenu/catalog.ebc` and `sleekmenu/covers.pak` beside itself. A card of
+`sleekmenu/catalog.ebc`, `sleekmenu/covers.pak`, and
+`sleekmenu/covers-zoom.pak` beside itself. A card of
 three thousand games takes under a minute. Run it again whenever you add
 games.
 
@@ -63,6 +64,7 @@ What the tool writes, and what it leaves alone:
 ```text
 /sleekmenu/catalog.ebc     titles, genre, publisher, year, descriptions
 /sleekmenu/covers.pak      every cover in one file
+/sleekmenu/covers-zoom.pak 320x240 covers for the zoom view
 /sleekmenu/favorites.txt   written by the browser as you star games
 /sleekmenu/history.txt     the last fifteen games you launched
 /sleekmenu/cheats.txt      which cheats are on, per game
@@ -78,7 +80,7 @@ The tool never moves, renames or deletes anything on the card.
 | Control | Browsing | Launch details |
 |---|---|---|
 | D-pad / stick | Move | — |
-| A | Open a folder, or a game's details | — |
+| A | Open a folder, or a game's details | Zoom box art |
 | B | Parent folder | Back to the list |
 | Start | — | Play |
 | C-left / C-right | Previous / next genre tab | — |

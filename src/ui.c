@@ -202,6 +202,12 @@ static void unload_cover(sm_ui_t *ui) {
     ui->cover_loaded = false;
 }
 
+static void unload_zoom_cover(sm_ui_t *ui) {
+    if (ui->zoom_sprite) sprite_free(ui->zoom_sprite);
+    ui->zoom_sprite = NULL;
+    ui->zoom_loaded = false;
+}
+
 static void unload_slots(sm_ui_t *ui) {
     for (int i = 0; i < SM_UI_SLOTS_MAX; i++) {
         if (ui->slot_sprites[i]) sprite_free(ui->slot_sprites[i]);
@@ -259,7 +265,7 @@ static bool cover_bytes_plausible(const void *data, uint32_t length) {
 }
 
 static sprite_t *load_item_cover(uint32_t item, const sm_catalog_t *catalog,
-    sm_cover_pack_t *pack) {
+    sm_cover_pack_t *pack, bool zoom) {
     if (item & SM_UI_FOLDER_BIT) return NULL;
     /* A ROM load overwrites cartridge SDRAM, taking SleekMenu's own image and
        the DragonFS holding the box art with it. Code and the already-loaded
@@ -291,29 +297,63 @@ static sprite_t *load_item_cover(uint32_t item, const sm_catalog_t *catalog,
         if (!sprite) { free(bytes); return NULL; }
         sprite->flags |= SPRITE_FLAGS_OWNEDBUFFER;
     } else {
-        if (snprintf(path, sizeof(path), SM_COVERS_DIR "/%s", game.cover) >= (int)sizeof(path))
+        const char *directory = zoom ? SM_ZOOM_COVERS_DIR : SM_COVERS_DIR;
+        if (snprintf(path, sizeof(path), "%s/%s", directory, game.cover) >= (int)sizeof(path))
             return NULL;
         if (!cover_asset_exists(path)) return NULL;
         /* sprite_load uses libdragon's asset loader, which validates and
            decompresses DragonFS or SD sprite assets before exposing dimensions. */
         sprite = sprite_load(path);
     }
-    if (sprite && !((sprite->width == COVER_WIDTH && sprite->height == COVER_HEIGHT) ||
+    if (sprite && zoom && !(sprite->width == 320 && sprite->height == 240)) {
+        sprite_free(sprite); sprite = NULL;
+    } else if (sprite && !zoom && !((sprite->width == SM_ART_WIDTH && sprite->height == SM_ART_HEIGHT) ||
+                    (sprite->width == COVER_WIDTH && sprite->height == COVER_HEIGHT) ||
                     (sprite->width == 64 && sprite->height == 48))) {
         sprite_free(sprite); sprite = NULL;
     }
     return sprite;
 }
 
+static void draw_cover_scaled(surface_t *dst, int x, int y, sprite_t *sprite,
+    int width, int height);
+
 static void draw_cover(surface_t *surface, int x, int y, sprite_t *sprite) {
-    graphics_draw_sprite_trans(surface, x + (COVER_WIDTH - sprite->width) / 2,
-        y + (COVER_HEIGHT - sprite->height) / 2, sprite);
+    draw_cover_scaled(surface, x, y, sprite, COVER_WIDTH, COVER_HEIGHT);
 }
 
-/* Nearest-neighbour, straight into the framebuffer. The alternative was a
-   second set of art at tile size, which would have doubled what the ROM
-   carries for a view most people pass through. Twelve tiles is about 37,000
-   pixels a frame, which is a few milliseconds of plain stores. */
+static uint16_t sample_rgba16(const surface_t *source, int x_fixed, int y_fixed) {
+    int x0 = x_fixed >> 8, y0 = y_fixed >> 8;
+    unsigned fx = (unsigned)x_fixed & 255u, fy = (unsigned)y_fixed & 255u;
+    int x1 = x0 + 1 < source->width ? x0 + 1 : x0;
+    int y1 = y0 + 1 < source->height ? y0 + 1 : y0;
+    const uint16_t *row0 = (const uint16_t *)((const uint8_t *)source->buffer +
+        (size_t)y0 * source->stride);
+    const uint16_t *row1 = (const uint16_t *)((const uint8_t *)source->buffer +
+        (size_t)y1 * source->stride);
+    uint16_t p00 = row0[x0], p10 = row0[x1], p01 = row1[x0], p11 = row1[x1];
+    unsigned red = (((p00 >> 11) & 31u) * (256u - fx) * (256u - fy) +
+                    ((p10 >> 11) & 31u) * fx * (256u - fy) +
+                    ((p01 >> 11) & 31u) * (256u - fx) * fy +
+                    ((p11 >> 11) & 31u) * fx * fy + 32768u) >> 16;
+    unsigned green = (((p00 >> 6) & 31u) * (256u - fx) * (256u - fy) +
+                      ((p10 >> 6) & 31u) * fx * (256u - fy) +
+                      ((p01 >> 6) & 31u) * (256u - fx) * fy +
+                      ((p11 >> 6) & 31u) * fx * fy + 32768u) >> 16;
+    unsigned blue = (((p00 >> 1) & 31u) * (256u - fx) * (256u - fy) +
+                     ((p10 >> 1) & 31u) * fx * (256u - fy) +
+                     ((p01 >> 1) & 31u) * (256u - fx) * fy +
+                     ((p11 >> 1) & 31u) * fx * fy + 32768u) >> 16;
+    unsigned alpha = ((p00 & 1u) * (256u - fx) * (256u - fy) +
+                      (p10 & 1u) * fx * (256u - fy) +
+                      (p01 & 1u) * (256u - fx) * fy +
+                      (p11 & 1u) * fx * fy + 128u) >> 16;
+    return (uint16_t)((red << 11) | (green << 6) | (blue << 1) | alpha);
+}
+
+/* Bilinear sampling keeps small lettering from aliasing when the 158x112 source
+   is drawn into the original 96x72 screen slot. It touches four 16-bit pixels
+   per output pixel and avoids a second, larger framebuffer or texture set. */
 static void draw_cover_scaled(surface_t *dst, int x, int y, sprite_t *sprite,
     int width, int height) {
     surface_t src = sprite_get_pixels(sprite);
@@ -324,9 +364,11 @@ static void draw_cover_scaled(surface_t *dst, int x, int y, sprite_t *sprite,
     if (x < 0 || y < 0 || x + width > dst->width || y + height > dst->height) return;
     for (int row = 0; row < height; row++) {
         uint16_t *out = (uint16_t *)((uint8_t *)dst->buffer + (size_t)(y + row) * dst->stride) + x;
-        const uint16_t *in = (const uint16_t *)((const uint8_t *)src.buffer +
-            (size_t)(row * sprite->height / height) * src.stride);
-        for (int col = 0; col < width; col++) out[col] = in[col * sprite->width / width];
+        int source_y = height > 1 ? row * (src.height - 1) * 256 / (height - 1) : 0;
+        for (int col = 0; col < width; col++) {
+            int source_x = width > 1 ? col * (src.width - 1) * 256 / (width - 1) : 0;
+            out[col] = sample_rgba16(&src, source_x, source_y);
+        }
     }
 }
 
@@ -379,11 +421,10 @@ static void draw_cover_turned(surface_t *dst, int x, int centre_y,
         visible_to = top + height > dst->height ? dst->height - top : height;
 
         for (row = visible_from; row < visible_to; row++) {
-            const uint16_t *in = (const uint16_t *)((const uint8_t *)src.buffer +
-                (size_t)(row * src_height / height) * src.stride);
             uint16_t *out = (uint16_t *)((uint8_t *)dst->buffer +
                 (size_t)(top + row) * dst->stride) + out_x;
-            *out = in[src_x];
+            *out = sample_rgba16(&src, src_x * 256,
+                row * (src_height - 1) * 256 / (height > 1 ? height - 1 : 1));
         }
 
         /* The reflection: the same column mirrored below the card, fading out
@@ -392,16 +433,14 @@ static void draw_cover_turned(surface_t *dst, int x, int centre_y,
         for (row = 0; row < reflection; row++) {
             int y = top + height + row;
             int source_row = height - 1 - row * height / (reflection ? reflection : 1);
-            const uint16_t *in;
             uint16_t *out;
             unsigned shift = 1u + (unsigned)(row * 2 / (reflection ? reflection : 1));
             if (y < 0 || y >= dst->height) break;
             if (source_row < 0) break;
             if (shift > 4u) break;      /* past here it is black anyway */
-            in = (const uint16_t *)((const uint8_t *)src.buffer +
-                (size_t)(source_row * src_height / height) * src.stride);
             out = (uint16_t *)((uint8_t *)dst->buffer + (size_t)y * dst->stride) + out_x;
-            *out = dim_rgba16(in[src_x], shift);
+            *out = dim_rgba16(sample_rgba16(&src, src_x * 256,
+                source_row * (src_height - 1) * 256 / (height > 1 ? height - 1 : 1)), shift);
         }
     }
 }
@@ -475,7 +514,16 @@ static void load_selected_cover(sm_ui_t *ui, const sm_catalog_t *catalog) {
     if (ui->item_count == 0 || (ui->items[ui->selected] & SM_UI_FOLDER_BIT)) return;
     ui->cover_loaded = true;
     ui->cover_index = ui->items[ui->selected];
-    ui->cover_sprite = load_item_cover(ui->items[ui->selected], catalog, &ui->covers);
+    ui->cover_sprite = load_item_cover(ui->items[ui->selected], catalog, &ui->covers, false);
+}
+
+static void load_selected_zoom_cover(sm_ui_t *ui, const sm_catalog_t *catalog) {
+    unload_zoom_cover(ui);
+    if (ui->item_count == 0 || (ui->items[ui->selected] & SM_UI_FOLDER_BIT)) return;
+    ui->zoom_loaded = true;
+    ui->zoom_index = ui->items[ui->selected];
+    ui->zoom_sprite = load_item_cover(ui->items[ui->selected], catalog,
+                                      &ui->zoom_covers, true);
 }
 
 /* Point the slots at the current window, carrying over any sprite already
@@ -528,7 +576,7 @@ static void load_slot_step(sm_ui_t *ui, const sm_catalog_t *catalog) {
     for (uint32_t slot = 0; slot < ui->slot_count; slot++) {
         if (!ui->slot_pending[slot]) continue;
         ui->slot_pending[slot] = false;
-        ui->slot_sprites[slot] = load_item_cover(ui->slot_indices[slot], catalog, &ui->covers);
+        ui->slot_sprites[slot] = load_item_cover(ui->slot_indices[slot], catalog, &ui->covers, false);
         return;
     }
 }
@@ -899,6 +947,7 @@ void ui_update(sm_ui_t *ui, const sm_catalog_t *catalog, sm_actions_t actions, c
         /* Opened once and held: after this, a cover costs a seek and a read
            rather than a walk through a directory of 745 long filenames. */
         sm_cover_pack_open(&ui->covers, SM_COVER_PACK_PATH);
+          sm_cover_pack_open(&ui->zoom_covers, SM_ZOOM_COVER_PACK_PATH);
         sm_favorites_load(&ui->favorites, SM_FAVORITES_PATH);
         sm_history_load(&ui->history, SM_HISTORY_PATH);
         /* The launcher writes the entry itself, at the point of no return. */
@@ -919,6 +968,14 @@ void ui_update(sm_ui_t *ui, const sm_catalog_t *catalog, sm_actions_t actions, c
        out of this function, and a slide frozen half way through because the
        controller stopped is worse than no slide at all. */
     if (ui->flow_frames) ui->flow_frames--;
+    if (ui->screen == SM_SCREEN_ZOOM) {
+        if (actions.back || actions.select) {
+            unload_zoom_cover(ui);
+            ui->screen = SM_SCREEN_LAUNCH_DETAILS;
+            load_selected_cover(ui, catalog);
+        }
+        return;
+    }
     if (ui->screen == SM_SCREEN_LAUNCH_DETAILS) {
         if (actions.back) {
             if (ui->diagnostics) { ui->diagnostics = false; return; }
@@ -929,6 +986,12 @@ void ui_update(sm_ui_t *ui, const sm_catalog_t *catalog, sm_actions_t actions, c
         if (actions.toggle_view)
             launch_set_boot_mode(launch_boot_mode() == SM_BOOT_FAST ? SM_BOOT_VERIFY : SM_BOOT_FAST);
         if (actions.filter) ui->diagnostics = !ui->diagnostics;
+        if (actions.select && !ui->diagnostics) {
+            unload_cover(ui);
+            load_selected_zoom_cover(ui, catalog);
+            ui->screen = SM_SCREEN_ZOOM;
+            return;
+        }
         if (actions.favorite && !ui->diagnostics) {
             if (launch_cheats_available()) {
                 ui->screen = SM_SCREEN_CHEATS;
@@ -2122,10 +2185,34 @@ static void draw_cheats(surface_t *s, const sm_layout_t *l, const sm_ui_t *ui) {
     draw_truncated(s, l->safe_left + 3, l->footer_top + 2, "A TOGGLE   L/R PAGE   B BACK", chars);
 }
 
+static void draw_zoom(surface_t *s, const sm_layout_t *l, const sm_catalog_t *c,
+    const sm_ui_t *ui) {
+    sm_game_t game;
+    graphics_fill_screen(s, graphics_make_color(8, 12, 20, 255));
+    if (ui->zoom_sprite)
+        draw_cover_scaled(s, 0, 0, ui->zoom_sprite, l->width, l->height);
+    else {
+        graphics_set_color(graphics_make_color(180, 200, 220, 255), 0);
+        graphics_draw_text(s, l->safe_left, l->safe_top + 8, "NO ZOOM ART");
+    }
+    graphics_draw_box(s, 0, l->height - 14, l->width, 14,
+        graphics_make_color(8, 12, 20, 220));
+    graphics_set_color(graphics_make_color(240, 240, 232, 255), 0);
+    if (catalog_get(c, ui->items[ui->selected] & ~SM_UI_FOLDER_BIT, &game))
+        draw_truncated(s, 6, l->height - 12, game.title,
+            (l->width - 70) / SM_FONT_WIDTH);
+    graphics_set_color(graphics_make_color(180, 200, 220, 255), 0);
+    graphics_draw_text(s, l->width - 60, l->height - 12, "B BACK");
+}
+
 void ui_draw(surface_t *s, const sm_layout_t *l, const sm_catalog_t *c, const sm_ui_t *ui) {
     graphics_fill_screen(s,graphics_make_color(8,12,20,255));
     graphics_draw_box(s,l->safe_left,l->safe_top,l->safe_right-l->safe_left,20,graphics_make_color(24,45,72,255));
     graphics_set_color(graphics_make_color(245,230,160,255),0);
+    if (ui->screen == SM_SCREEN_ZOOM) {
+        draw_zoom(s, l, c, ui);
+        return;
+    }
     if (ui->screen == SM_SCREEN_LAUNCH_DETAILS) {
         draw_launch_card(s, l, c, ui);
         return;
@@ -2202,6 +2289,8 @@ void ui_draw(surface_t *s, const sm_layout_t *l, const sm_catalog_t *c, const sm
 
 void ui_close(sm_ui_t *ui) {
     unload_cover(ui);
+    unload_zoom_cover(ui);
     unload_slots(ui);
     sm_cover_pack_close(&ui->covers);
+    sm_cover_pack_close(&ui->zoom_covers);
 }

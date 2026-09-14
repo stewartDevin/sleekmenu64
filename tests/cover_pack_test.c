@@ -82,12 +82,12 @@ int main(int argc, char **argv) {
     assert(sm_cover_pack_ready(&pack));
     assert(pack.count == 3u);
 
-    expect_found(&pack, "Super Mario 64 (USA).sprite", 96u, 72u);
+    expect_found(&pack, "Super Mario 64 (USA).sprite", 158u, 112u);
     /* exFAT is case-insensitive; the catalog's spelling must not have to
        match the packer's. */
-    expect_found(&pack, "super mario 64 (usa).SPRITE", 96u, 72u);
+    expect_found(&pack, "super mario 64 (usa).SPRITE", 158u, 112u);
     expect_found(&pack, "Wave Race 64 (USA).sprite", 64u, 48u);
-    expect_found(&pack, "Zelda (Japan).sprite", 96u, 72u);
+    expect_found(&pack, "Zelda (Japan).sprite", 158u, 112u);
 
     assert(sm_cover_pack_read(&pack, "Not On This Card.sprite", &length) == NULL);
     assert(length == 0u);

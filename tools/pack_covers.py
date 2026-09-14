@@ -62,19 +62,28 @@ def plan(roms_root: Path, rom_paths: list[str], repo: MetadataRepo) -> Plan:
     return Plan(covers, sources, without)
 
 
-def pack(planned: Plan, repo: MetadataRepo, destination: Path, dry_run: bool = False,
+def pack(planned: Plan, repo: MetadataRepo, destination: Path,
+         zoom_destination: Path | None = None, dry_run: bool = False,
          progress=None) -> int:
     """Write every sprite the plan names. Returns how many were written.
     `progress` is anything with a step(detail) method -- see tools/progress.py
     -- or None; converting several hundred pictures takes long enough to
     look stuck."""
     destination.mkdir(parents=True, exist_ok=True)
+    if zoom_destination is not None:
+        zoom_destination.mkdir(parents=True, exist_ok=True)
     written = 0
     for name in sorted(planned.sources):
         if not dry_run:
             found = planned.sources[name]
-            make_sprite.convert_bytes(repo.read(found), destination / name, found.path,
-                                      width_scale=repo.width_scale)
+            source = repo.read(found)
+            make_sprite.convert_bytes(source, destination / name, found.path,
+                                      width_scale=repo.width_scale,
+                                      canvas=(158, 112))
+            if zoom_destination is not None:
+                make_sprite.convert_bytes(source, zoom_destination / name, found.path,
+                                          width_scale=repo.width_scale,
+                                          canvas=(320, 240))
         written += 1
         if progress is not None:
             progress.step(name)
@@ -88,12 +97,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--metadata", type=Path, required=True,
                         help="the metadata collection: its zip, or a folder")
     parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("--zoom-destination", type=Path,
+                        help="optional directory for 320x240 zoom sprites")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     try:
         with MetadataRepo.open(args.metadata) as repo:
             planned = plan(args.roms, library.walk(args.roms), repo)
-            written = pack(planned, repo, args.destination, args.dry_run)
+            written = pack(planned, repo, args.destination,
+                           args.zoom_destination, args.dry_run)
     except (CoverPackError, RepoError, make_sprite.SpriteError, library.LibraryError,
             OSError) as exc:
         parser.error(str(exc))

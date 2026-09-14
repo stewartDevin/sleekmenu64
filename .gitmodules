@@ -1,0 +1,4 @@
+[submodule "libdragon"]
+	path = third_party/libdragon
+	url = https://github.com/DragonMinded/libdragon
+	branch = trunk

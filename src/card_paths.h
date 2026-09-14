@@ -25,8 +25,14 @@
 #ifndef SM_COVER_PACK_PATH
 #define SM_COVER_PACK_PATH SM_CARD_DIR "/covers.pak"
 #endif
+#ifndef SM_ZOOM_COVER_PACK_PATH
+#define SM_ZOOM_COVER_PACK_PATH SM_CARD_DIR "/covers-zoom.pak"
+#endif
 #ifndef SM_COVERS_DIR
 #define SM_COVERS_DIR SM_CARD_DIR "/covers"
+#endif
+#ifndef SM_ZOOM_COVERS_DIR
+#define SM_ZOOM_COVERS_DIR SM_CARD_DIR "/covers-zoom"
 #endif
 #ifndef SM_FAVORITES_PATH
 #define SM_FAVORITES_PATH SM_CARD_DIR "/favorites.txt"

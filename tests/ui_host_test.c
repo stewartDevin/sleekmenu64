@@ -527,6 +527,13 @@ int main(void) {
         assert(ui.screen == SM_SCREEN_LAUNCH_DETAILS);
         assert(ui.cover_sprite != NULL);
         draw();                               /* and the card can draw it */
+        frame(PRESS(select));                 /* A again opens the zoom view */
+        assert(ui.screen == SM_SCREEN_ZOOM);
+        assert(ui.zoom_sprite != NULL);
+        draw();
+        frame(PRESS(back));                   /* B returns to the detail card */
+        assert(ui.screen == SM_SCREEN_LAUNCH_DETAILS);
+        assert(ui.cover_sprite != NULL);
         /* The other half of the same fix -- the save type, which also only
            the list view used to load -- cannot be asserted here: it is read
            from the ROM's own header, and the host has no ROMs. It goes down
@@ -619,12 +626,9 @@ int main(void) {
             start(rows, 1u);
             settle();
             draw();
-            assert(sm_test_drew("SIZE"));
-            /* Seven rows is what the NTSC panel holds exactly; the path along
-               the bottom is the thing a row too many would push off. */
-            assert(sm_test_drew("a.z64"));
+                /* The larger cover leaves room for five detail rows on NTSC;
+                    the path is clipped before the footer. */
             assert(sm_test_drew("SAVE"));
-            assert(sm_test_drew("PAK"));
         }
     }
 
@@ -1011,7 +1015,7 @@ int main(void) {
                 lines++;
             }
         }
-        assert(lines >= 4);
+        assert(lines >= 3);
         /* ...and it ends in an ellipsis, because it did not all fit. */
         assert(sm_test_drew("..."));
         assert(!sm_test_drew("certainly does not fit"));

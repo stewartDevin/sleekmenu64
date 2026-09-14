@@ -94,16 +94,22 @@ class HostModuleTests(unittest.TestCase):
             with self.subTest(covers="pack" if packed else "loose"), \
                  tempfile.TemporaryDirectory() as scratch:
                 pack = pathlib.Path(scratch) / "covers.pak"
+                zoom_pack = pathlib.Path(scratch) / "covers-zoom.pak"
+                zoom_pack.write_bytes(cover_pack.build(
+                    {"cover.sprite": make_sprite.encode(
+                        Image.new("RGBA", (320, 240), (40, 80, 120, 255)),
+                        )}))
                 if packed:
                     pack.write_bytes(cover_pack.build(
                         {"cover.sprite": make_sprite.encode(
-                            Image.new("RGBA", (96, 72), (40, 80, 120, 255)))}))
+                            Image.new("RGBA", (158, 112), (40, 80, 120, 255)))}))
                 build_and_run(
                     "ui-test", sources,
                     ["-Itests/stubs"] + CHEATS_FLAGS +
                     [f'-DSM_FAVORITES_PATH="{scratch}/favorites.txt"',
                      f'-DSM_COVERS_DIR="{scratch}/covers"',
-                     f'-DSM_COVER_PACK_PATH="{pack}"'],
+                     f'-DSM_COVER_PACK_PATH="{pack}"',
+                     f'-DSM_ZOOM_COVER_PACK_PATH="{zoom_pack}"'],
                 )
 
     def test_host_list_view_module(self):
@@ -400,7 +406,8 @@ class AssetLoadTests(unittest.TestCase):
         self.assertNotIn("embedded_cover_path", body)
         # One candidate, and it goes through the existence guard, so a missing
         # sprite is never handed to sprite_load().
-        self.assertEqual(body.count('SM_COVERS_DIR "/%s"'), 1)
+        self.assertIn("SM_COVERS_DIR", body)
+        self.assertIn("SM_ZOOM_COVERS_DIR", body)
         self.assertEqual(body.count("cover_asset_exists(path)"), 1)
 
     def test_grid_folders_are_drawn_as_folders(self):

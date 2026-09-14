@@ -35,7 +35,7 @@ def png_bytes() -> bytes:
     global PNG_BYTES
     if PNG_BYTES is None:
         buffer = io.BytesIO()
-        Image.new("RGBA", (158, 112), (10, 90, 160, 255)).save(buffer, format="PNG")
+        Image.new("RGBA", (320, 240), (10, 90, 160, 255)).save(buffer, format="PNG")
         PNG_BYTES = buffer.getvalue()
     return PNG_BYTES
 
@@ -155,22 +155,28 @@ class EntryPointTests(unittest.TestCase):
         out = self.card / card_layout.CARD_FOLDER
         self.assertTrue((out / card_layout.CATALOG_NAME).is_file())
         self.assertTrue((out / card_layout.COVER_PACK_NAME).is_file())
+        self.assertTrue((out / card_layout.ZOOM_COVER_PACK_NAME).is_file())
         self.assertIn(b"A description of NWRE.", (out / card_layout.CATALOG_NAME).read_bytes())
         # and nothing was unpacked onto the card
         self.assertEqual(sorted(p.name for p in out.iterdir()),
-                         [card_layout.CATALOG_NAME, card_layout.COVER_PACK_NAME])
+                 sorted([card_layout.CATALOG_NAME, card_layout.COVER_PACK_NAME,
+                     card_layout.ZOOM_COVER_PACK_NAME]))
 
     def test_a_collection_unpacked_for_another_menu_is_honoured(self):
         write_collection(self.card / "menu", "NWRE")
         code = self.run_prep()
         self.assertEqual(code, 0, self.output)
         self.assertTrue((self.card / card_layout.CARD_FOLDER / card_layout.COVER_PACK_NAME).is_file())
+        self.assertTrue((self.card / card_layout.CARD_FOLDER /
+                 card_layout.ZOOM_COVER_PACK_NAME).is_file())
 
     def test_an_explicit_collection_anywhere_wins(self):
         elsewhere = write_collection(Path(self.temporary.name) / "elsewhere", "NWRE")
         code = self.run_prep("--metadata", str(elsewhere))
         self.assertEqual(code, 0, self.output)
         self.assertTrue((self.card / card_layout.CARD_FOLDER / card_layout.COVER_PACK_NAME).is_file())
+        self.assertTrue((self.card / card_layout.CARD_FOLDER /
+                 card_layout.ZOOM_COVER_PACK_NAME).is_file())
 
     def test_no_collection_still_writes_a_catalog_and_says_where_to_get_one(self):
         code = self.run_prep()
@@ -178,6 +184,7 @@ class EntryPointTests(unittest.TestCase):
         out = self.card / card_layout.CARD_FOLDER
         self.assertTrue((out / card_layout.CATALOG_NAME).is_file())
         self.assertFalse((out / card_layout.COVER_PACK_NAME).exists())
+        self.assertFalse((out / card_layout.ZOOM_COVER_PACK_NAME).exists())
         self.assertIn("release-metadata.zip", self.output)
         self.assertIn("github.com/n64-tools/n64-flashcart-menu-metadata", self.output)
 
@@ -188,6 +195,7 @@ class EntryPointTests(unittest.TestCase):
         out = self.card / card_layout.CARD_FOLDER
         self.assertTrue((out / card_layout.CATALOG_NAME).is_file())
         self.assertFalse((out / card_layout.COVER_PACK_NAME).exists())
+        self.assertFalse((out / card_layout.ZOOM_COVER_PACK_NAME).exists())
 
     def test_a_broken_collection_is_reported_not_a_traceback(self):
         (self.card / "release-metadata.zip").write_bytes(b"not a zip at all")

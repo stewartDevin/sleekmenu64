@@ -40,7 +40,8 @@ from tools import (build_catalog, build_metadata, cover_pack, coverdb, library,
 from tools.metadata_repo import MetadataRepo, RepoError
 from tools.progress import Progress
 from tools.card_layout import (  # noqa: F401  (re-exported for callers)
-    CARD_FOLDER, COVERS_FOLDER, COVER_PACK_NAME, CATALOG_NAME)
+    CARD_FOLDER, COVERS_FOLDER, COVER_PACK_NAME, ZOOM_COVERS_FOLDER,
+    ZOOM_COVER_PACK_NAME, CATALOG_NAME)
 
 
 class PrepareError(ValueError):
@@ -72,6 +73,7 @@ def prepare(roms: Path, card: Path, database_path: Path, repo: MetadataRepo | No
     work = work or Path(tempfile.mkdtemp(prefix="sleekmenu-"))
     work.mkdir(parents=True, exist_ok=True)
     covers_out = work / CARD_FOLDER / COVERS_FOLDER
+    zoom_covers_out = work / CARD_FOLDER / ZOOM_COVERS_FOLDER
     if rom_paths is None:
         rom_paths = library.walk(roms)
     summary: dict[str, object] = {"database_entries": len(coverdb.load(database_path))
@@ -97,8 +99,9 @@ def prepare(roms: Path, card: Path, database_path: Path, repo: MetadataRepo | No
         if log is print and progress_stream is not False and planned.sources and not dry_run:
             progress = Progress(len(planned.sources), "sprites",
                                 stream=None if progress_stream is None else progress_stream)
-        summary["sprites"] = pack_covers.pack(planned, repo, covers_out, dry_run=dry_run,
-                                              progress=progress)
+        summary["sprites"] = pack_covers.pack(
+            planned, repo, covers_out, zoom_covers_out, dry_run=dry_run,
+            progress=progress)
         if progress is not None:
             progress.done(f"sprites:  {summary['sprites']} written")
         else:
@@ -109,8 +112,12 @@ def prepare(roms: Path, card: Path, database_path: Path, repo: MetadataRepo | No
             # over 100 KB of it, with names this long -- which is the pause
             # between moving the cursor and the picture appearing.
             count, size = cover_pack.pack_directory(covers_out, work / COVER_PACK_NAME)
+            zoom_count, zoom_size = cover_pack.pack_directory(
+                zoom_covers_out, work / ZOOM_COVER_PACK_NAME)
             summary["pack_bytes"] = size
-            log(f"pack:     {count} covers in one {size // 1024} KB file")
+            summary["zoom_pack_bytes"] = zoom_size
+            log(f"pack:     {count} covers in {size // 1024} KB; "
+                f"zoom pack: {zoom_count} covers in {zoom_size // 1024} KB")
 
     metadata_path = work / "metadata.json"
     document, how = build_metadata.build(roms, card, database_path, genres, overrides,
@@ -140,13 +147,23 @@ def prepare(roms: Path, card: Path, database_path: Path, repo: MetadataRepo | No
         if summary.get("sprites"):
             if loose_covers:
                 target = destination / COVERS_FOLDER
+                zoom_target = destination / ZOOM_COVERS_FOLDER
                 target.mkdir(parents=True, exist_ok=True)
+                zoom_target.mkdir(parents=True, exist_ok=True)
                 for sprite in sorted(covers_out.glob("*.sprite")):
                     shutil.copy2(sprite, target / sprite.name)
-                written.append(f"{CARD_FOLDER}/{COVERS_FOLDER}/ ({summary['sprites']} sprites)")
+                for sprite in sorted(zoom_covers_out.glob("*.sprite")):
+                    shutil.copy2(sprite, zoom_target / sprite.name)
+                written.append(f"{CARD_FOLDER}/{COVERS_FOLDER}/ and "
+                               f"{CARD_FOLDER}/{ZOOM_COVERS_FOLDER}/ "
+                               f"({summary['sprites']} sprites each)")
             else:
                 shutil.copy2(work / COVER_PACK_NAME, destination / COVER_PACK_NAME)
-                written.append(f"{CARD_FOLDER}/{COVER_PACK_NAME} ({summary['sprites']} covers)")
+                shutil.copy2(work / ZOOM_COVER_PACK_NAME,
+                             destination / ZOOM_COVER_PACK_NAME)
+                written.append(f"{CARD_FOLDER}/{COVER_PACK_NAME} and "
+                               f"{CARD_FOLDER}/{ZOOM_COVER_PACK_NAME} "
+                               f"({summary['sprites']} covers each)")
         if rom_image is not None:
             if not rom_image.is_file():
                 raise PrepareError(f"ROM image not found: {rom_image}")

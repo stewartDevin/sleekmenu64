@@ -54,13 +54,25 @@ class MakeSpriteTests(unittest.TestCase):
         self.assertFalse(make_sprite._fits_tmem(32, 65))
         self.assertFalse(make_sprite._fits_tmem(33, 64))    # 68 -> padded to 72
 
+    def test_native_cover_slices_stay_within_tmem(self):
+        hslices, vslices = make_sprite._slices(158, 112)
+        self.assertEqual(hslices, 9)
+        self.assertEqual(vslices, 10)
+        rows_per_slice = 4096 // ((158 * 2 + 7) & ~7)
+        self.assertLessEqual((112 + vslices - 1) // vslices, rows_per_slice)
+
+    def test_zoom_cover_slices_stay_within_tmem(self):
+        hslices, vslices = make_sprite._slices(320, 240)
+        self.assertEqual(hslices, 20)
+        self.assertEqual(vslices, 40)
+
     def test_fitting_letterboxes_onto_the_matte_without_distortion(self):
         tall = Image.new("RGBA", (100, 400), (255, 0, 0, 255))
         fitted = make_sprite.fit_image(tall)
         self.assertEqual(fitted.size, make_sprite.CANVAS_SIZE)
         # The corners are matte because a 1:4 image cannot fill a 4:3 frame.
         self.assertEqual(fitted.getpixel((0, 0)), make_sprite.MATTE_RGBA)
-        self.assertEqual(fitted.getpixel((48, 36)), (255, 0, 0, 255))
+        self.assertEqual(fitted.getpixel((79, 56)), (255, 0, 0, 255))
 
     def test_a_pre_stretched_picture_is_read_at_half_width(self):
         """The Pro menu's metadata is stretched to double width for a
@@ -68,10 +80,10 @@ class MakeSpriteTests(unittest.TestCase):
         it would be a 96x34 ribbon; at half width it is the 4:3 box again."""
         stretched = Image.new("RGBA", (240, 85), (200, 30, 30, 255))
         fitted = make_sprite.fit_image(stretched, width_scale=0.5)
-        # 120x85 fits the 96x72 canvas at 96x68: matte above and below only.
-        self.assertEqual(fitted.size, (96, 72))
+        # 120x85 fits the 158x112 canvas with matte around the art.
+        self.assertEqual(fitted.size, (158, 112))
         self.assertEqual(fitted.getpixel((48, 36))[:3], (200, 30, 30))
-        self.assertEqual(fitted.getpixel((0, 36))[:3], (200, 30, 30))
+        self.assertNotEqual(fitted.getpixel((0, 36))[:3], (200, 30, 30))
         self.assertNotEqual(fitted.getpixel((48, 0))[:3], (200, 30, 30))
         ribbon = make_sprite.fit_image(stretched)
         self.assertNotEqual(ribbon.getpixel((48, 4))[:3], (200, 30, 30))
@@ -82,10 +94,11 @@ class MakeSpriteTests(unittest.TestCase):
             source = root / "art.png"
             sample_image(200, 150).save(source)
             written = make_sprite.convert(source, root / "out" / "art.sprite")
-            # 8-byte header + 96*72*2 pixels + 128-byte extended block.
-            self.assertEqual(written, 8 + 96 * 72 * 2 + 128)
+            # 8-byte header + 158*112*2 pixels + 128-byte extended block.
+            self.assertEqual(written, 8 + 158 * 112 * 2 + 128)
             payload = (root / "out" / "art.sprite").read_bytes()
-            self.assertEqual(payload[:4], bytes((0, 96, 0, 72)))
+            self.assertEqual(payload[:4], bytes((0, 158, 0, 112)))
+            self.assertGreaterEqual(payload[7], 10)
 
     def test_conversion_is_deterministic(self):
         first = make_sprite.encode(sample_image(40, 30))

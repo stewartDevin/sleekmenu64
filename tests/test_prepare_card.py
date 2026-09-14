@@ -28,7 +28,7 @@ class PrepareCardTests(unittest.TestCase):
             self.repo.close()
         self.temporary.cleanup()
 
-    def add_box(self, key, size=(158, 112)):
+    def add_box(self, key, size=(320, 240)):
         target = self.collection / key / "boxart_front.png"
         target.parent.mkdir(parents=True, exist_ok=True)
         Image.new("RGBA", size, (20, 90, 160, 255)).save(target)
@@ -51,14 +51,19 @@ class PrepareCardTests(unittest.TestCase):
 
         catalog = self.card / "sleekmenu" / "catalog.ebc"
         pack = self.card / "sleekmenu" / "covers.pak"
+        zoom_pack = self.card / "sleekmenu" / "covers-zoom.pak"
         self.assertTrue(catalog.is_file())
+        self.assertTrue(zoom_pack.is_file())
         # One file, not a directory of them: FatFs walks a directory linearly
         # on every open, which is the pause between moving the cursor and the
         # picture appearing.
         self.assertFalse((self.card / "sleekmenu" / "covers").exists())
         entries = cover_pack.read_index(pack.read_bytes())
+        zoom_entries = cover_pack.read_index(zoom_pack.read_bytes())
         self.assertEqual([e.name for e in entries], ["NWRE.sprite"])
-        self.assertEqual(entries[0].length, 8 + 96 * 72 * 2 + 128)
+        self.assertEqual([e.name for e in zoom_entries], ["NWRE.sprite"])
+        self.assertEqual(entries[0].length, 8 + 158 * 112 * 2 + 128)
+        self.assertEqual(zoom_entries[0].length, 8 + 320 * 240 * 2 + 128)
         self.assertEqual((summary["games"], summary["covers"], summary["sprites"]), (1, 1, 1))
         self.assertIn(b"NWRE.sprite", catalog.read_bytes())
 
@@ -67,6 +72,7 @@ class PrepareCardTests(unittest.TestCase):
         self.add_box("N/G/A/E")
         self.prepare(loose_covers=True)
         self.assertTrue((self.card / "sleekmenu" / "covers" / "NGAE.sprite").is_file())
+        self.assertTrue((self.card / "sleekmenu" / "covers-zoom" / "NGAE.sprite").is_file())
         self.assertFalse((self.card / "sleekmenu" / "covers.pak").exists())
 
     def test_catalog_paths_are_recorded_against_the_card_not_the_rom_folder(self):

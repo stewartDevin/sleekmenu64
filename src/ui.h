@@ -61,7 +61,8 @@ _Static_assert((int)SM_UI_SLOTS_MAX >= (int)SM_UI_GRID_VISIBLE,
    after you stop. */
 enum { SM_UI_SETTLE_FRAMES = 6 };
 
-typedef enum { SM_SCREEN_LIBRARY, SM_SCREEN_FILTERS, SM_SCREEN_LAUNCH_DETAILS, SM_SCREEN_CHEATS } sm_screen_t;
+typedef enum { SM_SCREEN_LIBRARY, SM_SCREEN_FILTERS, SM_SCREEN_LAUNCH_DETAILS,
+               SM_SCREEN_ZOOM, SM_SCREEN_CHEATS } sm_screen_t;
 typedef enum { SM_VIEW_LIST, SM_VIEW_GRID, SM_VIEW_COVERFLOW } sm_view_t;
 
 typedef struct {
@@ -108,6 +109,9 @@ typedef struct {
     sprite_t *cover_sprite;
     uint32_t cover_index;
     bool cover_loaded;
+   sprite_t *zoom_sprite;
+   uint32_t zoom_index;
+   bool zoom_loaded;
     sprite_t *slot_sprites[SM_UI_SLOTS_MAX];
     uint32_t slot_indices[SM_UI_SLOTS_MAX];
     /* Which slots have not been looked up yet. A scroll keeps the sprites for
@@ -149,6 +153,7 @@ typedef struct {
        keep running, but it pays a FatFs directory walk per cover and that is
        the pause between moving the cursor and the picture arriving. */
     sm_cover_pack_t covers;
+   sm_cover_pack_t zoom_covers;
     bool initialized;
 } sm_ui_t;
 

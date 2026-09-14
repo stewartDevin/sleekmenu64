@@ -33,6 +33,8 @@ enum {
     SM_ROW_HEIGHT = 10,
     SM_COVER_WIDTH = 96,
     SM_COVER_HEIGHT = 72,
+    SM_ART_WIDTH = 158,
+    SM_ART_HEIGHT = 112,
     SM_FONT_WIDTH = 5,
     SM_FONT_HEIGHT = 8
 };

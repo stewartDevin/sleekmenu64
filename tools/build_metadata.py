@@ -90,7 +90,7 @@ def relative_root(roms: Path, sd_root: Path | None) -> Path:
     nothing on screen to explain it. Passing --sd-root records paths against
     the card, which always resolves."""
     if sd_root is None:
-        return roms
+        return roms.resolve()
     roms_resolved, sd_resolved = roms.resolve(), sd_root.resolve()
     try:
         roms_resolved.relative_to(sd_resolved)
@@ -123,7 +123,7 @@ def build(roms: Path, sd_root: Path | None = None, coverdb_path: Path | None = D
 
     records, how = [], Counter()
     for rom_path in rom_paths:
-        path = roms / rom_path
+        path = (roms / rom_path).resolve()
         relative = PurePosixPath(path.relative_to(root).as_posix())
         if library.is_disk(rom_path):
             # A 64DD image has no cartridge header and no game code, so no

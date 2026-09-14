@@ -145,11 +145,7 @@ class CompactFontTests(unittest.TestCase):
         self.assertIn("FONT_SOURCE := third_party/spleen/spleen-5x8.bdf", makefile)
 
     def test_the_vi_filter_stays_on_at_320_wide(self):
-        """FILTERS_DISABLED looked like the way to a crisp font, and at 16 bpp
-        and 320 across libdragon asserts on it at startup (a hardware bug on
-        NTSC consoles, its issue #66). The ROM shipped that way once and
-        stopped at the assert on the console. Resample stays until the
-        framebuffer is 32-bit or 640 wide."""
+        """The original 16-bit framebuffer requires VI resampling at 320 pixels."""
         display = (ROOT / "src/display.c").read_text(encoding="utf-8")
         code = re.sub(r"/\*.*?\*/", "", display, flags=re.S)   # the comment names the option; the code must not
         self.assertIn("display_init(resolution, DEPTH_16_BPP, 2, GAMMA_NONE, FILTERS_RESAMPLE);", code)

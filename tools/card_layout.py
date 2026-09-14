@@ -17,6 +17,8 @@ FIRMWARE_FOLDER = "ED64"
 
 COVERS_FOLDER = "covers"
 COVER_PACK_NAME = "covers.pak"
+ZOOM_COVERS_FOLDER = "covers-zoom"
+ZOOM_COVER_PACK_NAME = "covers-zoom.pak"
 CATALOG_NAME = "catalog.ebc"
 
 #: Folder names the library scan never descends into, case-folded for

@@ -20,7 +20,7 @@ tools/mksprite/mksprite.c (spritemaker_write) rather than guessed at:
 
 Only uncompressed RGBA16 is written. mksprite defaults to compression level 1,
 which is a libdragon-specific codec that would have to be reimplemented here;
-uncompressed costs about 3 KB per 96x72 cover and saves the console the
+uncompressed costs about 35 KB per 158x112 cover and saves the console the
 decompression, which is the right trade for a card with 50 GB free.
 
 tests/test_make_sprite.py checks the output byte-for-byte against sprites
@@ -36,7 +36,7 @@ import struct
 import sys
 from pathlib import Path
 
-CANVAS_SIZE = (96, 72)
+CANVAS_SIZE = (158, 112)
 # The colour behind art that does not fill the frame. Matching the detail
 # panel's background makes a portrait cover look matted rather than pasted.
 MATTE_RGBA = (28, 32, 40, 255)
@@ -69,7 +69,14 @@ def _slices(width: int, height: int, tiles: tuple[int, int] | None = None) -> tu
         if width % tile_width or height % tile_height:
             raise SpriteError(f"{width}x{height} does not divide into {tile_width}x{tile_height} tiles")
         return max(1, width // tile_width), max(1, height // tile_height)
-    return max(1, width // 16), max(1, height // 16)
+    hslices = max(1, width // 16)
+    vslices = max(1, height // 16)
+    pitch = (width * 2 + 7) & ~7
+    if pitch * height > TMEM_BYTES:
+        # Keep each large RGBA16 band within the RDP's 4 KiB TMEM limit.
+        rows_per_slice = max(1, TMEM_BYTES // ((width * 2 + 7) & ~7))
+        vslices = max(vslices, (height + rows_per_slice - 1) // rows_per_slice)
+    return hslices, vslices
 
 
 def _fits_tmem(width: int, height: int) -> bool:

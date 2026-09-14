@@ -9,7 +9,7 @@ from tools.metadata_repo import MetadataRepo
 from tests.rom_fixtures import write_rom
 
 
-def png(color, size=(158, 112)):
+def png(color, size=(320, 240)):
     from PIL import Image
     out = io.BytesIO()
     Image.new("RGBA", size, color).save(out, format="PNG")
@@ -71,10 +71,13 @@ class CoverPackerTests(unittest.TestCase):
         just wants covers."""
         write_rom(self.roms / "Super Mario 64 (USA).z64", 1, 2, game_code="SM")
         planned = pack_covers.plan(self.roms, ["Super Mario 64 (USA).z64"], self.repo)
-        written = pack_covers.pack(planned, self.repo, self.root / "covers")
+        zoom = self.root / "covers-zoom"
+        written = pack_covers.pack(planned, self.repo, self.root / "covers", zoom)
         self.assertEqual(written, 1)
         sprite = (self.root / "covers" / "NSME.sprite").read_bytes()
-        self.assertEqual(sprite[:4], (96).to_bytes(2, "big") + (72).to_bytes(2, "big"))
+        self.assertEqual(sprite[:4], (158).to_bytes(2, "big") + (112).to_bytes(2, "big"))
+        zoom_sprite = (zoom / "NSME.sprite").read_bytes()
+        self.assertEqual(zoom_sprite[:4], (320).to_bytes(2, "big") + (240).to_bytes(2, "big"))
 
     def test_a_dry_run_writes_nothing_and_still_counts(self):
         write_rom(self.roms / "Super Mario 64 (USA).z64", 1, 2, game_code="SM")

@@ -13,7 +13,8 @@ this is the reference.
 /ROMS/...                   your games, in any folders          yours
 
 /sleekmenu/catalog.ebc      titles, genre, publisher, year     written by the tool
-/sleekmenu/covers.pak       every cover, one file              written by the tool
+/sleekmenu/covers.pak       every thumbnail cover, one file   written by the tool
+/sleekmenu/covers-zoom.pak  320x240 cover art for zoom view   written by the tool
 /sleekmenu/favorites.txt    one ROM path per line              written by the browser
 /sleekmenu/history.txt      the last fifteen launches          written by the browser
 /sleekmenu/cheats.txt       which cheats are on, per game      written by the browser
@@ -96,12 +97,15 @@ different games share a code, neither is used. The collection's
 
 `tools/make_sprite.py` writes libdragon's sprite format directly from the
 collection's PNGs; no toolchain is involved. Covers are fitted, not
-stretched, so tall Japanese boxes keep their proportions on the 96x72
-thumbnail. Sprites are named after the box's game code, so a game present in
+stretched, so tall Japanese boxes keep their proportions in the 158x112 source
+asset while remaining a 96x72 thumbnail on screen. Sprites are named after the box's game code, so a game present in
 several folders costs one picture. A 3,400-game library comes to about 700
 sprites and 10 MB.
 
-The covers go into one `covers.pak` rather than a folder of files because
+The thumbnail covers go into `covers.pak`; the same source collection also
+produces `covers-zoom.pak` with 320x240 sprites for the zoom view. Press A on
+the launch details page to open that view, and B to return. Both packs use the
+same sprite names. Packs are used rather than folders of files because
 opening a file by name on a FAT card means walking the folder from the start,
 and with long file names that is slow. `--loose-covers` writes the folder
 form instead, which is handier when debugging a card.
