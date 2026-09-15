@@ -12,6 +12,11 @@
 #include <strings.h>
 
 enum { FILTER_ROWS = 6 };
+/* Bytes of zoom art read per frame. Small enough that the console still polls
+   the controller every frame while the card streams in, which is what makes
+   B/A responsive the instant they are pressed instead of after the whole
+   read finishes. */
+enum { SM_UI_ZOOM_CHUNK_BYTES = 8192u };
 
 /* Where the card keeps its art. Named rather than spelled out at the one call
    site so the host test can point the browser at a directory it can create;
@@ -208,6 +213,17 @@ static void unload_zoom_cover(sm_ui_t *ui) {
     ui->zoom_loaded = false;
 }
 
+/* Frees a zoom read that has not finished yet -- pressing B mid-stream must
+   not leave a dangling buffer or a stale progress bar behind. */
+static void cancel_zoom_stream(sm_ui_t *ui) {
+    free(ui->zoom_stream_buffer);
+    ui->zoom_stream_buffer = NULL;
+    ui->zoom_stream_offset = 0u;
+    ui->zoom_stream_total = 0u;
+    ui->load_total_kib = 0u;
+    ui->load_done_kib = 0u;
+}
+
 static void unload_slots(sm_ui_t *ui) {
     for (int i = 0; i < SM_UI_SLOTS_MAX; i++) {
         if (ui->slot_sprites[i]) sprite_free(ui->slot_sprites[i]);
@@ -355,17 +371,36 @@ static uint16_t sample_rgba16(const surface_t *source, int x_fixed, int y_fixed)
    per output pixel and avoids a second, larger framebuffer or texture set. */
 static void draw_cover_scaled(surface_t *dst, int x, int y, sprite_t *sprite,
     int width, int height) {
+    if (width <= 0 || height <= 0) return;
+
     surface_t src = sprite_get_pixels(sprite);
     if (surface_get_format(dst) != FMT_RGBA16 || surface_get_format(&src) != FMT_RGBA16) {
         graphics_draw_box(dst, x, y, width, height, graphics_make_color(35, 42, 52, 255));
         return;
     }
+
     if (x < 0 || y < 0 || x + width > dst->width || y + height > dst->height) return;
+
+    /* Fast path: 1:1 identity copy bypasses the sampler entirely */
+    if (width == src.width && height == src.height) {
+        size_t row_bytes = (size_t)width * sizeof(uint16_t);
+        for (int row = 0; row < height; row++) {
+            uint16_t *out = (uint16_t *)((uint8_t *)dst->buffer + (size_t)(y + row) * dst->stride) + x;
+            const uint16_t *in = (const uint16_t *)((const uint8_t *)src.buffer + (size_t)row * src.stride);
+            memcpy(out, in, row_bytes);
+        }
+        return;
+    }
+
+    /* Fallback scaling path */
+    int step_y = height > 1 ? ((src.height - 1) * 256) / (height - 1) : 0;
+    int step_x = width > 1 ? ((src.width - 1) * 256) / (width - 1) : 0;
+
     for (int row = 0; row < height; row++) {
         uint16_t *out = (uint16_t *)((uint8_t *)dst->buffer + (size_t)(y + row) * dst->stride) + x;
-        int source_y = height > 1 ? row * (src.height - 1) * 256 / (height - 1) : 0;
+        int source_y = row * step_y;
         for (int col = 0; col < width; col++) {
-            int source_x = width > 1 ? col * (src.width - 1) * 256 / (width - 1) : 0;
+            int source_x = col * step_x;
             out[col] = sample_rgba16(&src, source_x, source_y);
         }
     }
@@ -523,6 +558,41 @@ static void load_selected_zoom_cover(sm_ui_t *ui, const sm_catalog_t *catalog) {
     ui->zoom_index = ui->items[ui->selected];
     ui->zoom_sprite = load_item_cover(ui->items[ui->selected], catalog,
                                       &ui->zoom_covers, true);
+}
+
+/* Primes a zoom read rather than performing it: the pack case only locates
+   the entry and mallocs the buffer here, so the frame that presses A returns
+   immediately and the console keeps polling the controller while the bytes
+   stream in a few KB per frame afterwards (see ui_update's SM_SCREEN_ZOOM
+   handling). The loose-directory fallback has no chunked reader and is used
+   for debugging only, so it still loads in one go. */
+static void start_zoom_load(sm_ui_t *ui, const sm_catalog_t *catalog) {
+    sm_game_t game;
+    uint32_t offset, length;
+    uint32_t item;
+    cancel_zoom_stream(ui);
+    unload_zoom_cover(ui);
+    if (ui->item_count == 0 || (ui->items[ui->selected] & SM_UI_FOLDER_BIT)) return;
+    item = ui->items[ui->selected];
+    ui->zoom_index = item;
+    if (!sm_cart_image_intact() || !catalog_get(catalog, item, &game) ||
+        !safe_cover_path(game.cover))
+        return;
+    if (sm_cover_pack_ready(&ui->zoom_covers) &&
+        sm_cover_pack_locate(&ui->zoom_covers, game.cover, &offset, &length)) {
+        ui->zoom_stream_buffer = malloc(length);
+        if (!ui->zoom_stream_buffer) return;
+        ui->zoom_stream_offset = 0u;
+        ui->zoom_stream_total = length;
+        ui->zoom_stream_file_offset = offset;
+        ui->load_done_kib = 0u;
+        ui->load_total_kib = (length + 1023u) >> 10;
+        ui->load_verifying = false;
+        return;
+    }
+    /* No pack, or the cover is not in it: fall back to the loose-directory
+       loader, which reads in one go and is a debugging convenience only. */
+    load_selected_zoom_cover(ui, catalog);
 }
 
 /* Point the slots at the current window, carrying over any sprite already
@@ -969,9 +1039,44 @@ void ui_update(sm_ui_t *ui, const sm_catalog_t *catalog, sm_actions_t actions, c
     if (ui->flow_frames) ui->flow_frames--;
     if (ui->screen == SM_SCREEN_ZOOM) {
         if (actions.back || actions.select) {
+            cancel_zoom_stream(ui);
             unload_zoom_cover(ui);
             ui->screen = SM_SCREEN_LAUNCH_DETAILS;
             load_selected_cover(ui, catalog);
+            return;
+        }
+        if (ui->zoom_stream_buffer) {
+            uint32_t remaining = ui->zoom_stream_total - ui->zoom_stream_offset;
+            uint32_t chunk = remaining < SM_UI_ZOOM_CHUNK_BYTES ? remaining : SM_UI_ZOOM_CHUNK_BYTES;
+            if (!sm_cover_pack_read_chunk(&ui->zoom_covers,
+                    ui->zoom_stream_file_offset + ui->zoom_stream_offset,
+                    ui->zoom_stream_buffer + ui->zoom_stream_offset, chunk)) {
+                /* A read failure mid-stream leaves no art rather than a
+                   half-decoded one. */
+                cancel_zoom_stream(ui);
+                return;
+            }
+            ui->zoom_stream_offset += chunk;
+            ui->load_done_kib = ui->zoom_stream_offset >> 10;
+            if (ui->zoom_stream_offset >= ui->zoom_stream_total) {
+                sprite_t *sprite = sprite_load_buf(ui->zoom_stream_buffer, (int)ui->zoom_stream_total);
+                if (!sprite) {
+                    free(ui->zoom_stream_buffer);
+                } else {
+                    sprite->flags |= SPRITE_FLAGS_OWNEDBUFFER;
+                    if (sprite->width == 320 && sprite->height == 240) {
+                        ui->zoom_sprite = sprite;
+                        ui->zoom_loaded = true;
+                    } else {
+                        sprite_free(sprite);
+                    }
+                }
+                ui->zoom_stream_buffer = NULL;
+                ui->zoom_stream_offset = 0u;
+                ui->zoom_stream_total = 0u;
+                ui->load_total_kib = 0u;
+                ui->load_done_kib = 0u;
+            }
         }
         return;
     }
@@ -987,7 +1092,7 @@ void ui_update(sm_ui_t *ui, const sm_catalog_t *catalog, sm_actions_t actions, c
         if (actions.filter) ui->diagnostics = !ui->diagnostics;
         if (actions.select && !ui->diagnostics) {
             unload_cover(ui);
-            load_selected_zoom_cover(ui, catalog);
+            start_zoom_load(ui, catalog);
             ui->screen = SM_SCREEN_ZOOM;
             return;
         }
@@ -2189,7 +2294,9 @@ static void draw_zoom(surface_t *s, const sm_layout_t *l, const sm_catalog_t *c,
     const sm_ui_t *ui) {
     sm_game_t game;
     graphics_fill_screen(s, graphics_make_color(8, 12, 20, 255));
-    if (ui->zoom_sprite)
+    if (ui->load_total_kib)
+        draw_load_bar(s, l, ui);
+    else if (ui->zoom_sprite)
         draw_cover_scaled(s, 0, 0, ui->zoom_sprite, l->width, l->height);
     else {
         graphics_set_color(graphics_make_color(180, 200, 220, 255), 0);
@@ -2289,6 +2396,7 @@ void ui_draw(surface_t *s, const sm_layout_t *l, const sm_catalog_t *c, const sm
 
 void ui_close(sm_ui_t *ui) {
     unload_cover(ui);
+    cancel_zoom_stream(ui);
     unload_zoom_cover(ui);
     unload_slots(ui);
     sm_cover_pack_close(&ui->covers);

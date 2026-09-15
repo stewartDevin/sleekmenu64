@@ -109,9 +109,16 @@ typedef struct {
     sprite_t *cover_sprite;
     uint32_t cover_index;
     bool cover_loaded;
-   sprite_t *zoom_sprite;
-   uint32_t zoom_index;
-   bool zoom_loaded;
+    sprite_t *zoom_sprite;
+    uint32_t zoom_index;
+    bool zoom_loaded;
+    /* Zoom art streams in over several frames rather than one blocking read,
+       so a non-zero total here means a stream is in flight; load_done_kib and
+       load_total_kib below double as its progress bar. */
+    uint8_t *zoom_stream_buffer;
+    uint32_t zoom_stream_offset;
+    uint32_t zoom_stream_total;
+    uint32_t zoom_stream_file_offset;
     sprite_t *slot_sprites[SM_UI_SLOTS_MAX];
     uint32_t slot_indices[SM_UI_SLOTS_MAX];
     /* Which slots have not been looked up yet. A scroll keeps the sprites for

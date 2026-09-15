@@ -106,23 +106,36 @@ void sm_cover_pack_close(sm_cover_pack_t *pack) {
     memset(pack, 0, sizeof(*pack));
 }
 
-void *sm_cover_pack_read(sm_cover_pack_t *pack, const char *name, uint32_t *length) {
+bool sm_cover_pack_locate(sm_cover_pack_t *pack, const char *name,
+    uint32_t *offset, uint32_t *length) {
     int32_t at;
-    void *buffer;
-    uint32_t size;
-    if (length) *length = 0u;
-    if (!sm_cover_pack_ready(pack) || !name || !name[0]) return NULL;
+    if (!sm_cover_pack_ready(pack) || !name || !name[0]) return false;
     at = sm_cover_pack_find(pack->entries, pack->count, sm_cover_hash(name));
-    if (at < 0) return NULL;
-    size = pack->entries[at].length;
+    if (at < 0) return false;
     /* A sprite smaller than its own header is not a sprite, and a cover the
        size of a ROM is a corrupt offset. Both are cheaper to refuse here than
        to hand to the decoder. */
-    if (size < 16u || size > (1u << 20)) return NULL;
+    if (pack->entries[at].length < 16u || pack->entries[at].length > (1u << 20)) return false;
+    if (offset) *offset = pack->entries[at].offset;
+    if (length) *length = pack->entries[at].length;
+    return true;
+}
+
+bool sm_cover_pack_read_chunk(sm_cover_pack_t *pack, uint32_t file_offset,
+    void *destination, uint32_t chunk_length) {
+    if (!sm_cover_pack_ready(pack) || !destination || !chunk_length) return false;
+    if (fseek(pack->file, (long)file_offset, SEEK_SET)) return false;
+    return fread(destination, 1, chunk_length, pack->file) == chunk_length;
+}
+
+void *sm_cover_pack_read(sm_cover_pack_t *pack, const char *name, uint32_t *length) {
+    void *buffer;
+    uint32_t offset, size;
+    if (length) *length = 0u;
+    if (!sm_cover_pack_locate(pack, name, &offset, &size)) return NULL;
     buffer = malloc(size);
     if (!buffer) return NULL;
-    if (fseek(pack->file, (long)pack->entries[at].offset, SEEK_SET) ||
-        fread(buffer, 1, size, pack->file) != size) {
+    if (!sm_cover_pack_read_chunk(pack, offset, buffer, size)) {
         free(buffer);
         return NULL;
     }

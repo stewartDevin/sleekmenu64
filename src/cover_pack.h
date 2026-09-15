@@ -65,6 +65,15 @@ static inline bool sm_cover_pack_ready(const sm_cover_pack_t *pack) {
     return pack && pack->file && pack->entries && pack->count;
 }
 
+/* Where a cover's bytes live in the pack, without reading them -- so a caller
+   can stream them across several frames instead of blocking on one big read. */
+bool sm_cover_pack_locate(sm_cover_pack_t *pack, const char *name,
+    uint32_t *offset, uint32_t *length);
+
+/* One piece of a cover already located with sm_cover_pack_locate(). */
+bool sm_cover_pack_read_chunk(sm_cover_pack_t *pack, uint32_t file_offset,
+    void *destination, uint32_t chunk_length);
+
 /* The sprite bytes for a cover, malloc'd, or NULL. The caller owns the buffer;
    on the console it is handed straight to sprite_load_buf, which works in
    place, so it must outlive the sprite. */

@@ -529,6 +529,15 @@ int main(void) {
         draw();                               /* and the card can draw it */
         frame(PRESS(select));                 /* A again opens the zoom view */
         assert(ui.screen == SM_SCREEN_ZOOM);
+        assert(ui.zoom_sprite == NULL);        /* the art streams in, not a blocking read */
+        draw();                                /* the load bar, not a frozen screen */
+        frame(PRESS(back));                    /* B cancels the stream immediately */
+        assert(ui.screen == SM_SCREEN_LAUNCH_DETAILS);
+        assert(ui.cover_sprite != NULL);
+
+        frame(PRESS(select));                 /* back into the zoom view */
+        assert(ui.screen == SM_SCREEN_ZOOM);
+        idle(20);                              /* let the chunked read finish */
         assert(ui.zoom_sprite != NULL);
         draw();
         frame(PRESS(back));                   /* B returns to the detail card */
