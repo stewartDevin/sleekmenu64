@@ -2116,9 +2116,10 @@ static void draw_launch_card(surface_t *s, const sm_layout_t *l, const sm_catalo
     graphics_draw_box(s, l->safe_left, l->footer_top, width, SM_FOOTER_HEIGHT,
         graphics_make_color(16, 22, 32, 255));
     graphics_set_color(graphics_make_color(180, 200, 220, 255), 0);
-    snprintf(line, sizeof(line), "%s LOAD   C^ SWITCH   Z DETAILS%s",
+    snprintf(line, sizeof(line), "%s LOAD   C^ SWITCH   Z DETAILS%s%s",
         launch_boot_mode() == SM_BOOT_VERIFY ? "VERIFIED" : "FAST",
-        launch_cheats_available() ? "   Cv CHEATS" : "");
+        launch_cheats_available() ? "   Cv CHEATS" : "",
+        ui->cover_sprite ? "   A ZOOM ART" : "");
     draw_truncated(s, l->safe_left + 3, l->footer_top + 2, line, chars);
 }
 
