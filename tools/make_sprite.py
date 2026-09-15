@@ -20,7 +20,7 @@ tools/mksprite/mksprite.c (spritemaker_write) rather than guessed at:
 
 Only uncompressed RGBA16 is written. mksprite defaults to compression level 1,
 which is a libdragon-specific codec that would have to be reimplemented here;
-uncompressed costs about 35 KB per 158x112 cover and saves the console the
+uncompressed costs about 14 KB per 96x72 cover and saves the console the
 decompression, which is the right trade for a card with 50 GB free.
 
 tests/test_make_sprite.py checks the output byte-for-byte against sprites
@@ -36,10 +36,10 @@ import struct
 import sys
 from pathlib import Path
 
-CANVAS_SIZE = (158, 112)
 # The colour behind art that does not fill the frame. Matching the detail
 # panel's background makes a portrait cover look matted rather than pasted.
 MATTE_RGBA = (28, 32, 40, 255)
+CANVAS_SIZE = (96, 72)
 
 FMT_RGBA16 = 2
 SPRITE_FLAGS_EXT = 0x80

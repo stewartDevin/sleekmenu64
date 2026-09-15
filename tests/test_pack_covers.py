@@ -75,7 +75,7 @@ class CoverPackerTests(unittest.TestCase):
         written = pack_covers.pack(planned, self.repo, self.root / "covers", zoom)
         self.assertEqual(written, 1)
         sprite = (self.root / "covers" / "NSME.sprite").read_bytes()
-        self.assertEqual(sprite[:4], (158).to_bytes(2, "big") + (112).to_bytes(2, "big"))
+        self.assertEqual(sprite[:4], (96).to_bytes(2, "big") + (72).to_bytes(2, "big"))
         zoom_sprite = (zoom / "NSME.sprite").read_bytes()
         self.assertEqual(zoom_sprite[:4], (320).to_bytes(2, "big") + (240).to_bytes(2, "big"))
 

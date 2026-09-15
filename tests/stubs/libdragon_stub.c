@@ -38,8 +38,8 @@ sprite_t *sprite_load(const char *path) {
     sm_test_sprite_loads++;
     sprite = calloc(1, sizeof(*sprite));
     if (!sprite) return NULL;
-    sprite->width = 158;
-    sprite->height = 112;
+    sprite->width = 96;
+    sprite->height = 72;
     sprite->pixels = calloc((size_t)sprite->width * sprite->height, 2u);
     return sprite;
 }

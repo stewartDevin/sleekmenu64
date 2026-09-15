@@ -102,7 +102,7 @@ class HostModuleTests(unittest.TestCase):
                 if packed:
                     pack.write_bytes(cover_pack.build(
                         {"cover.sprite": make_sprite.encode(
-                            Image.new("RGBA", (158, 112), (40, 80, 120, 255)))}))
+                            Image.new("RGBA", (96, 72), (40, 80, 120, 255)))}))
                 build_and_run(
                     "ui-test", sources,
                     ["-Itests/stubs"] + CHEATS_FLAGS +

@@ -307,8 +307,7 @@ static sprite_t *load_item_cover(uint32_t item, const sm_catalog_t *catalog,
     }
     if (sprite && zoom && !(sprite->width == 320 && sprite->height == 240)) {
         sprite_free(sprite); sprite = NULL;
-    } else if (sprite && !zoom && !((sprite->width == SM_ART_WIDTH && sprite->height == SM_ART_HEIGHT) ||
-                    (sprite->width == COVER_WIDTH && sprite->height == COVER_HEIGHT) ||
+    } else if (sprite && !zoom && !((sprite->width == COVER_WIDTH && sprite->height == COVER_HEIGHT) ||
                     (sprite->width == 64 && sprite->height == 48))) {
         sprite_free(sprite); sprite = NULL;
     }

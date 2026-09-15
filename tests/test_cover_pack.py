@@ -13,9 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 HOST_CC = ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-Isrc"]
 
 FIXTURE = {
-    "Super Mario 64 (USA).sprite": (158, 112),
+    "Super Mario 64 (USA).sprite": (96, 72),
     "Wave Race 64 (USA).sprite": (64, 48),
-    "Zelda (Japan).sprite": (158, 112),
+    "Zelda (Japan).sprite": (96, 72),
 }
 
 

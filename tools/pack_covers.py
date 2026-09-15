@@ -79,7 +79,7 @@ def pack(planned: Plan, repo: MetadataRepo, destination: Path,
             source = repo.read(found)
             make_sprite.convert_bytes(source, destination / name, found.path,
                                       width_scale=repo.width_scale,
-                                      canvas=(158, 112))
+                                      canvas=(96, 72))
             if zoom_destination is not None:
                 make_sprite.convert_bytes(source, zoom_destination / name, found.path,
                                           width_scale=repo.width_scale,

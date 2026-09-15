@@ -62,7 +62,7 @@ class PrepareCardTests(unittest.TestCase):
         zoom_entries = cover_pack.read_index(zoom_pack.read_bytes())
         self.assertEqual([e.name for e in entries], ["NWRE.sprite"])
         self.assertEqual([e.name for e in zoom_entries], ["NWRE.sprite"])
-        self.assertEqual(entries[0].length, 8 + 158 * 112 * 2 + 128)
+        self.assertEqual(entries[0].length, 8 + 96 * 72 * 2 + 128)
         self.assertEqual(zoom_entries[0].length, 8 + 320 * 240 * 2 + 128)
         self.assertEqual((summary["games"], summary["covers"], summary["sprites"]), (1, 1, 1))
         self.assertIn(b"NWRE.sprite", catalog.read_bytes())
